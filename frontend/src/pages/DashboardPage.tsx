@@ -69,7 +69,10 @@ export default function DashboardPage() {
                 </p>
 
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  Good evening, Devananda 👋
+                  Good evening, Devananda 👋 
+                   Let's prepare for your next opportunity.
+                  
+
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500 sm:text-base">
