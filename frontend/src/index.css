@@ -28,3 +28,33 @@ textarea,
 select {
   font: inherit;
 }
+
+/* Visible keyboard focus everywhere (a11y). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* Print: resume page prints cleanly (app chrome hidden, see ResumePage). */
+@media print {
+  aside,
+  header.topbar,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: #fff;
+  }
+  .print-card {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}

@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: placeprep
+      POSTGRES_PASSWORD: placeprep
+      POSTGRES_DB: placeprep
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U placeprep"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      piston:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://placeprep:placeprep@postgres:5432/placeprep?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-please-override}
+      JWT_EXPIRES_IN: 7d
+      PORT: 5000
+      CLIENT_URL: http://localhost:5173
+      NODE_ENV: production
+      PISTON_URL: http://piston:2000/api/v2
+    ports:
+      - "${BACKEND_PORT:-5001}:5000"
+
+  # Sandboxed code execution (Piston). Privileged is required for job
+  # isolation. Runtimes (python, gcc, java) persist in piston_data; install
+  # with: docker compose exec piston sh -c '...' (see README).
+  piston:
+    image: ghcr.io/engineer-man/piston:latest
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "2000:2000"
+    volumes:
+      - piston_data:/piston
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5001}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:
+  piston_data:

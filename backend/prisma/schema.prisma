@@ -1,0 +1,413 @@
+// PlacePrep Prisma schema (v2 — product upgrade).
+// Additive-only upgrade: every v1 table/column is preserved, so existing
+// data migrates untouched. Statuses stay validated Strings (not DB enums)
+// deliberately: existing rows keep working and the state machine lives in
+// application.service with tests. See utils/constants + docs/api.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+model User {
+  id               String              @id @default(cuid())
+  name             String
+  email            String              @unique
+  passwordHash     String
+  role             Role                @default(STUDENT)
+  notificationPrefs Json?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  profile          StudentProfile?
+  resume           Resume?
+  applications     Application[]
+  announcements    Announcement[]      @relation("CreatedBy")
+  quizAttempts     QuizAttempt[]
+  codingProgress   CodingProgress[]
+  codingAttempts   CodingAttempt[]
+  submissions      CodingSubmission[]
+  interviewProgress InterviewProgress[]
+  notifications    Notification[]
+  snapshots        ReadinessSnapshot[]
+  statusChanges    ApplicationStatusHistory[] @relation("ChangedBy")
+  resourceBookmarks ResourceBookmark[]
+}
+
+model StudentProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cgpa           Float?
+  branch         String?
+  year           Int?
+  skills         String[] @default([])
+  phone          String?
+  resumeHeadline String?
+  // Resume-center fields (personal + education + links live on the profile
+  // so /profile and /resume edit one shared record).
+  location       String?
+  college        String?
+  degree         String?
+  graduationYear Int?
+  github         String?
+  linkedin       String?
+  portfolio      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Resume {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summary   String?
+  updatedAt DateTime @updatedAt
+  experiences    ResumeExperience[]
+  projects       ResumeProject[]
+  achievements   ResumeAchievement[]
+  certifications ResumeCertification[]
+}
+
+model ResumeExperience {
+  id           String   @id @default(cuid())
+  resumeId     String
+  resume       Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  company      String
+  role         String
+  startDate    String?
+  endDate      String?
+  description  String?
+  technologies String[] @default([])
+}
+
+model ResumeProject {
+  id          String   @id @default(cuid())
+  resumeId    String
+  resume      Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  technologies String[] @default([])
+  githubUrl   String?
+  liveUrl     String?
+  startDate   String?
+  endDate     String?
+}
+
+model ResumeAchievement {
+  id          String   @id @default(cuid())
+  resumeId    String
+  resume      Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  date        String?
+}
+
+model ResumeCertification {
+  id            String   @id @default(cuid())
+  resumeId      String
+  resume        Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String?
+  date          String?
+  credentialUrl String?
+}
+
+model Company {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  industry        String?
+  website         String?
+  description     String?
+  packageLpa      Float?
+  eligibilityCgpa Float?
+  roles           String[] @default([])
+  process         String?
+  topics          String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  drives          Drive[]
+}
+
+model Drive {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title           String
+  date            DateTime
+  deadline        DateTime?
+  location        String?
+  mode            String   @default("On-campus")
+  eligibility     String?
+  description     String?
+  status          String   @default("OPEN")
+  // Structured eligibility (optional; free-text `eligibility` is kept).
+  minCgpa         Float?
+  allowedBranches String[] @default([])
+  allowedYears    Int[]    @default([])
+  requiredSkills  String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  applications    Application[]
+
+  @@index([status])
+  @@index([companyId])
+}
+
+model Application {
+  id        String   @id @default(cuid())
+  userId    String
+  driveId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drive     Drive    @relation(fields: [driveId], references: [id], onDelete: Cascade)
+  status    String   @default("APPLIED")
+  appliedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  history   ApplicationStatusHistory[]
+
+  @@unique([userId, driveId])
+  @@index([driveId])
+  @@index([userId])
+}
+
+model ApplicationStatusHistory {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  oldStatus     String
+  newStatus     String
+  changedById   String?
+  changedBy     User?       @relation("ChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  note          String?
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  link      String?
+  ref       String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model ReadinessSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score            Int
+  academicsScore   Int
+  skillsScore      Int
+  codingScore      Int
+  aptitudeScore    Int
+  applicationsScore Int
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Resource {
+  id          String   @id @default(cuid())
+  title       String
+  category    String
+  type        String
+  url         String?
+  description String?
+  level       String?
+  tags        String[] @default([])
+  company     String?
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  bookmarks   ResourceBookmark[]
+
+  @@index([category])
+}
+
+model ResourceBookmark {
+  id         String   @id @default(cuid())
+  userId     String
+  resourceId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, resourceId])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  audience    String   @default("ALL")
+  createdById String?
+  createdBy   User?    @relation("CreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+}
+
+model CodingProblem {
+  id               String           @id @default(cuid())
+  title            String
+  slug             String?          @unique
+  difficulty       String
+  tags             String[]         @default([])
+  description      String
+  hint             String?
+  constraints      String?
+  inputFormat      String?
+  outputFormat     String?
+  sampleInput      String?
+  sampleOutput     String?
+  explanation      String?
+  estimatedMinutes Int?
+  companies        String[]         @default([])
+  // Judge fields: source INTERNAL problems can run here; EXTERNAL/CODEFORCES
+  // link out (only legally storable metadata is kept — see ingest script).
+  source           String           @default("INTERNAL")
+  externalId       String?
+  externalUrl      String?
+  expectedTimeComplexity   String?
+  expectedSpaceComplexity  String?
+  starterCode      Json?
+  executionSupported Boolean        @default(true)
+  createdAt        DateTime         @default(now())
+  progress         CodingProgress[]
+  attempts         CodingAttempt[]
+  testCases        CodingTestCase[]
+  submissions      CodingSubmission[]
+
+  @@index([source])
+  @@unique([source, externalId])
+}
+
+model CodingTestCase {
+  id             String        @id @default(cuid())
+  problemId      String
+  problem        CodingProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  input          String        @default("")
+  expectedOutput String
+  isSample       Boolean       @default(false)
+  order          Int           @default(0)
+
+  @@index([problemId])
+}
+
+model CodingSubmission {
+  id          String        @id @default(cuid())
+  userId      String
+  problemId   String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem     CodingProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  language    String
+  sourceCode  String
+  status      String
+  runtimeMs   Int?
+  memoryKb    Int?
+  passedTests Int           @default(0)
+  totalTests  Int           @default(0)
+  createdAt   DateTime      @default(now())
+
+  @@index([userId, problemId])
+  @@index([problemId])
+}
+
+model CodingLanguage {
+  id            String  @id @default(cuid())
+  code          String  @unique
+  name          String
+  pistonRuntime String
+  version       String?
+  active        Boolean @default(true)
+}
+
+model CodingProgress {
+  id         String        @id @default(cuid())
+  userId     String
+  problemId  String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem    CodingProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  solved     Boolean       @default(false)
+  bookmarked Boolean       @default(false)
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([userId, problemId])
+}
+
+model CodingAttempt {
+  id        String        @id @default(cuid())
+  userId    String
+  problemId String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   CodingProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  verdict   String
+  note      String?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, problemId])
+}
+
+model AptitudeQuestion {
+  id          String   @id @default(cuid())
+  category    String
+  topic       String   @default("General")
+  difficulty  String   @default("Medium")
+  question    String
+  options     String[]
+  answerIndex Int
+  explanation String?
+}
+
+model QuizAttempt {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category         String
+  difficulty       String?
+  score            Int
+  total            Int
+  timeTakenSeconds Int?
+  takenAt          DateTime @default(now())
+
+  @@index([userId])
+}
+
+model InterviewQuestion {
+  id         String   @id @default(cuid())
+  category   String
+  difficulty String   @default("Medium")
+  question   String
+  guidance   String?
+  keyPoints  String[] @default([])
+  companies  String[] @default([])
+  createdAt  DateTime @default(now())
+  progress   InterviewProgress[]
+
+  @@index([category])
+}
+
+model InterviewProgress {
+  id         String            @id @default(cuid())
+  userId     String
+  questionId String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  status     String
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([userId, questionId])
+}
