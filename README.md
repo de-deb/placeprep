@@ -29,6 +29,14 @@ Managing these resources separately makes preparation inefficient and difficult 
 PlacePrep solves this problem by providing a single platform where students can organize, prepare, and track every aspect of their placement journey.
 
 ---
+## Software Design 
+PlacePrep follows a layered client-server architecture with a React + TypeScript frontend and a Node.js + Express + TypeScript backend. The backend separates routes, middleware, controllers, services, and Prisma-based database access over PostgreSQL. The design emphasizes abstraction, modularity, high cohesion, low coupling, and separation of concerns. Major design decisions include React + TypeScript for maintainable UI development, a layered backend for responsibility separation, PostgreSQL + Prisma for relational data management, JWT + RBAC for protected role-based functionality, and Docker Compose for a consistent development environment.
+
+### Architecture 
+![PlacePrep Architecture](docs/design/architecture.png) Editable architecture source: `docs/design/architecture.drawio` 
+
+### Design Documentation 
+Design artifacts and UI screenshots are available under: `docs/design/`
 
 ## Target Users
 
